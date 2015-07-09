@@ -1,21 +1,21 @@
-﻿using Windows.ApplicationModel;
-using Windows.UI.Xaml.Media.Animation;
+﻿using System;
 using System.Linq;
-using System.Collections.Generic;
-using System;
-using System.Diagnostics;
+using Windows.ApplicationModel;
 using Windows.UI.Input;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
-using Windows.UI.Xaml.Controls.Primitives;
 using Windows.UI.Xaml.Input;
 using Windows.UI.Xaml.Media;
+using Windows.UI.Xaml.Media.Animation;
 using Windows.UI.Xaml.Shapes;
-
 #if WINDOWS_PHONE_APP
 using Windows.Phone.UI.Input;
 #endif
-//http://blogs.msdn.com/b/madenwal/archive/2015/03/25/how-to-create-a-hamburger-menu-control-for-windows-8-1-and-windows-phone.aspx
+
+// 
+// based on http://blogs.msdn.com/b/madenwal/archive/2015/03/25/how-to-create-a-hamburger-menu-control-for-windows-8-1-and-windows-phone.aspx
+//
+
 namespace Microsoft.DX.Controls
 {
     public class HamburgerMenu : ContentControl
@@ -27,6 +27,7 @@ namespace Microsoft.DX.Controls
         {
             DefaultStyleKey = typeof(HamburgerMenu);
 #if WINDOWS_PHONE_APP
+            // add back button support
             if (!DesignMode.DesignModeEnabled)
             {
                 HardwareButtons.BackPressed += delegate(object sender, BackPressedEventArgs args)
@@ -40,24 +41,28 @@ namespace Microsoft.DX.Controls
             var gestureRecognizer = new GestureRecognizer();
             Loaded += delegate
             {
-                var storyboard = Storyboard;
-                var children = storyboard.Children;
-                var duration = TimeSpan.Zero;
-                foreach (var child in children)
+                var visualStateGroups = VisualStateManager.GetVisualStateGroups((FrameworkElement)VisualTreeHelper.GetChild(this, 0));
+                var state = visualStateGroups[0].States.First(s => s.Name == "OpenLeftPane");
+                var storyboard = state.Storyboard;
+
+                var animations = storyboard.Children;
+                var animationDuration = TimeSpan.Zero;
+                foreach (var animation in animations)
                 {
-                    if (!child.Duration.HasTimeSpan)
+                    if (!animation.Duration.HasTimeSpan)
                     {
                         continue;
                     }
-                    var childDuration = child.BeginTime.GetValueOrDefault(TimeSpan.Zero) + child.Duration.TimeSpan;
-                    if (childDuration > duration)
+                    var childDuration = animation.BeginTime.GetValueOrDefault(TimeSpan.Zero) + animation.Duration.TimeSpan;
+                    if (childDuration > animationDuration)
                     {
-                        duration = childDuration;
+                        animationDuration = childDuration;
                     }
                 }
+                // capture horizontal slide gesture
                 gestureRecognizer.GestureSettings = GestureSettings.ManipulationTranslateX;//|GestureSettings.CrossSlide;
 
-                var leftPanePresenter = GetTemplateChild("leftPanePresenter") as ContentPresenter;
+                var leftPanePresenter = LeftPanePresenter;
 
                 if (leftPanePresenter == null)
                 {
@@ -91,13 +96,14 @@ namespace Microsoft.DX.Controls
                     gestureRecognizer.ProcessMoveEvents(args.GetIntermediatePoints(leftPanePresenter));
                 };
 
-                var easingFunctionsBackup = children.OfType<DoubleAnimation>().Select(animation => new { animation, function = animation.EasingFunction });
+                // make a backup of easing functions
+                var easingFunctionsBackup = animations.OfType<DoubleAnimation>().Select(animation => new { animation, function = animation.EasingFunction });
 
                 gestureRecognizer.ManipulationStarted +=
-                    delegate(GestureRecognizer sender, ManipulationStartedEventArgs args)
+                    delegate
                     {
-                        Debug.WriteLine("ManipulationStarted {0} {1} {2}", args.Cumulative.Translation, args.PointerDeviceType, args.Position);
-                        foreach (var doubleAnimation in children.OfType<DoubleAnimation>())
+                        // make easing function linear
+                        foreach (var doubleAnimation in animations.OfType<DoubleAnimation>())
                         {
                             doubleAnimation.EasingFunction = null;
                         }
@@ -105,14 +111,15 @@ namespace Microsoft.DX.Controls
                 gestureRecognizer.ManipulationUpdated +=
                     delegate(GestureRecognizer sender, ManipulationUpdatedEventArgs args)
                     {
-                        //                        Debug.WriteLine("ManipulationUpdated {0} {1} {2} {3} {4} {5} {6}", args.Cumulative.Translation.X, args.Cumulative.Translation.Y, args.PointerDeviceType, args.Position, args.Delta, args.Velocities.Angular, args.Velocities.Expansion, args.Velocities.Linear);
                         var translateX = Math.Min(0, args.Cumulative.Translation.X);
                         translateX = Math.Max(translateX, -LeftPaneWidth);
 
+                        //restart animation
                         VisualStateManager.GoToState(this, "BaseState", false);
                         VisualStateManager.GoToState(this, "OpenLeftPane", false);
                         var d = translateX / -LeftPaneWidth;
-                        var timeSpan = new TimeSpan(duration.Ticks - (long)(duration.Ticks * d));
+                        var timeSpan = new TimeSpan(animationDuration.Ticks - (long)(animationDuration.Ticks * d));
+                        // seek to current position
                         storyboard.Seek(timeSpan);
                         storyboard.Pause();
 
@@ -120,35 +127,26 @@ namespace Microsoft.DX.Controls
                 gestureRecognizer.ManipulationCompleted +=
                     delegate(GestureRecognizer sender, ManipulationCompletedEventArgs args)
                     {
-                        Debug.WriteLine("ManipulationCompleted {0} {1} {2} {3} {4} {5}", args.Cumulative.Translation, args.PointerDeviceType, args.Position, args.Velocities.Angular, args.Velocities.Expansion, args.Velocities.Linear);
+                        //restore easing functions
                         foreach (var easingFunction in easingFunctionsBackup)
                         {
                             easingFunction.animation.EasingFunction = easingFunction.function;
                         }
+
+                        // slide left more than half of left panel 
                         if (args.Cumulative.Translation.X < -LeftPaneWidth / 2)
                         {
                             IsLeftPaneOpen = false;
                         }
                         else
                         {
+                            // reopen back
                             IsLeftPaneOpen = false;
                             IsLeftPaneOpen = true;
                         }
                     };
 
             };
-        }
-
-        private Storyboard Storyboard
-        {
-            get
-            {
-                var child = VisualTreeHelper.GetChild(this, 0);
-                var visualStateGroups = VisualStateManager.GetVisualStateGroups((FrameworkElement)child);
-                var state = visualStateGroups[0].States.First(s => s.Name == "OpenLeftPane");
-                var storyboard = state.Storyboard;
-                return storyboard;
-            }
         }
 
         protected override void OnApplyTemplate()
@@ -160,21 +158,6 @@ namespace Microsoft.DX.Controls
             if (MainPaneRectangle != null)
             {
                 MainPaneRectangle.Tapped += (sender, e) => { IsLeftPaneOpen = false; };
-            }
-            var hamburgerToggleButton = FindName("HamburgerToggleButton") as ToggleButton;
-            if (hamburgerToggleButton != null)
-            {
-                hamburgerToggleButton.Loaded += delegate(object sender, RoutedEventArgs args)
-                {
-                    var frameworkElement = (FrameworkElement)VisualTreeHelper.GetChild(hamburgerToggleButton, 0);
-
-                    var visualStateGroups = VisualStateManager.GetVisualStateGroups(frameworkElement);
-                    var group = visualStateGroups[0];
-                    group.CurrentStateChanging += delegate(object sender1, VisualStateChangedEventArgs args1)
-                    {
-                        Debug.WriteLine("Changing " + " from " + args1.OldState.Name + " -> " + args1.NewState.Name);
-                    };
-                };
             }
 
             // Ensure that the TranslateX on the RenderTransform of the left pane is set to the negative value of the left pa
@@ -211,21 +194,19 @@ namespace Microsoft.DX.Controls
         private static void OnIsLeftPaneOpenChanged(DependencyObject sender, DependencyPropertyChangedEventArgs args)
         {
             var hamburgerMenu = sender as HamburgerMenu;
-            if (hamburgerMenu != null)
+            if (hamburgerMenu == null || hamburgerMenu.LeftPane == null)
             {
-                if (hamburgerMenu.LeftPane != null)
-                {
-                    // Change to appropriate view state when the the IsLeftPaneOpen is toggled
-                    var value = (bool)args.NewValue;
-                    if (value)
-                    {
-                        VisualStateManager.GoToState(hamburgerMenu, "OpenLeftPane", true);
-                    }
-                    else
-                    {
-                        VisualStateManager.GoToState(hamburgerMenu, "CloseLeftPane", true);
-                    }
-                }
+                return;
+            }
+            // Change to appropriate view state when the the IsLeftPaneOpen is toggled
+            var value = (bool)args.NewValue;
+            if (value)
+            {
+                VisualStateManager.GoToState(hamburgerMenu, "OpenLeftPane", true);
+            }
+            else
+            {
+                VisualStateManager.GoToState(hamburgerMenu, "CloseLeftPane", true);
             }
         }
 

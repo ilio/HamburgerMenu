@@ -1,17 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Runtime.InteropServices.WindowsRuntime;
-using Windows.Foundation;
-using Windows.Foundation.Collections;
-using Windows.UI.Xaml;
-using Windows.UI.Xaml.Controls;
-using Windows.UI.Xaml.Controls.Primitives;
-using Windows.UI.Xaml.Data;
-using Windows.UI.Xaml.Input;
-using Windows.UI.Xaml.Media;
-using Windows.UI.Xaml.Media.Animation;
+﻿using Windows.UI.Xaml;
 using Windows.UI.Xaml.Navigation;
 
 // The Blank Page item template is documented at http://go.microsoft.com/fwlink/?LinkId=234238
@@ -21,13 +8,13 @@ namespace Microsoft.DX
     /// <summary>
     /// An empty page that can be used on its own or navigated to within a Frame.
     /// </summary>
-    public sealed partial class MainPage : Page
+    public sealed partial class MainPage
     {
         public MainPage()
         {
-            this.InitializeComponent();
+            InitializeComponent();
 
-            this.NavigationCacheMode = NavigationCacheMode.Required;
+            NavigationCacheMode = NavigationCacheMode.Required;
         }
 
         /// <summary>
@@ -46,26 +33,15 @@ namespace Microsoft.DX
             // this event is handled for you.
         }
 
-        private void Button_Click(object sender, RoutedEventArgs e)
+        private void ToggleButton_Checked(object sender, Windows.UI.Xaml.RoutedEventArgs e)
         {
-            VisualStateManager.GoToState(hamburger, "BaseState", false);
-            VisualStateManager.GoToState(hamburger, "OpenLeftPane", false);
-            //            Storyboard.Stop();
-            //            Storyboard.Begin();
-            Storyboard.Seek(TimeSpan.FromMilliseconds(100));
-            Storyboard.Pause();
+            LeftPanel.Margin = new Thickness(0, 80, 0, 0);
         }
 
-        private Storyboard Storyboard
+        private void ToggleButton_Unchecked(object sender, Windows.UI.Xaml.RoutedEventArgs e)
         {
-            get
-            {
-                var child = VisualTreeHelper.GetChild(hamburger, 0);
-                var visualStateGroups = VisualStateManager.GetVisualStateGroups((FrameworkElement)child);
-                var state = visualStateGroups[0].States.First(s => s.Name == "OpenLeftPane");
-                var storyboard = state.Storyboard;
-                return storyboard;
-            }
+            LeftPanel.Margin = new Thickness(0, 0, 0, 0);
         }
+
     }
 }
