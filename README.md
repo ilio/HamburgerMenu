@@ -6,3 +6,5 @@ New features:
 0. Animation on hamburger button.
 0. Swipe to close.
 0. Click on back button close the menu.
+
+![See preview.gif](https://raw.githubusercontent.com/ilio/HamburgerMenu/github/preview.gif)
